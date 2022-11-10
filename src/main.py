@@ -3,7 +3,6 @@ from first_build import Backtest, Portfolio, Strategy
 from typing import Optional
 from pydantic import BaseModel
 
-
 class Strategi(BaseModel):
     id: int
     productName: str
@@ -29,7 +28,7 @@ app = FastAPI()
 @app.get("/")
 async def root():
     return {
-        "message":"fuck the world"
+        "message":"this is root"
     }
 
 @app.post("/backtest")
@@ -63,11 +62,11 @@ async def backtestAPI(portfolioInput: PortfolioInput):
         strategyList
     )
     
-    backtest_object.doBacktest()
+    await backtest_object.doBacktest()
 
     
-    print('포트폴리오 결과 :', backtest.portfolio_object.portfolio_account_with_tax_benefit)
+    print('date :', portfolioInput.startDate)
     
     return {
-        "test":backtest.portfolio_object.portfolio_account_with_tax_benefit
+        "test":portfolioInput.startDate
     }

@@ -8,14 +8,14 @@ from datetime import datetime
 from datetime import timedelta
 warnings.simplefilter(action='ignore', category=FutureWarning)  # FutureWaring 제거
 
-opendf = pd.read_csv('/Users/gimsangsu/Desktop/mainF/school/project/graduateProject/businessLogic/pythonServer/src/openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
+opendf = pd.read_csv('./openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
 opendf['Opendate'] = pd.to_datetime(opendf['Opendate'], format='%Y-%m-%d', errors='raise')  # 원소를 datetime타입으로 변경
 datetimeList = []
 for date in opendf['Opendate']:
     date = pd.Timestamp(date).strftime('%Y-%m-%d')
     datetimeList.append(datetime.strptime(date, '%Y-%m-%d'))
 
-def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계산 (월초: 0, 월말: 1)
+async def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계산 (월초: 0, 월말: 1)
 
     rtList = []
 
@@ -52,7 +52,7 @@ def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계산 (월
     return rtList  # 납입 예정일 리스트 출력
 
 
-def getDailyDateInfo(start_date, end_date):
+async def getDailyDateInfo(start_date, end_date):
     rtList = []
 
     for day in opendf['Opendate'][start_date:end_date]:
@@ -61,7 +61,7 @@ def getDailyDateInfo(start_date, end_date):
     return rtList
 
 
-def getYearlyDateInfo(start_date, end_date):
+async def getYearlyDateInfo(start_date, end_date):
     rtList = []
 
     a = list(rrule(YEARLY,
@@ -81,7 +81,7 @@ def getYearlyDateInfo(start_date, end_date):
     return rtList
 
 
-def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸런싱 날짜 계산 (월초 or 월말)
+async def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸런싱 날짜 계산 (월초 or 월말)
     rtList = []  # 반환할 리스트
 
     sd = datetime.strptime(start_date, '%Y-%m-%d')  # 시작날짜 저장
@@ -103,7 +103,20 @@ def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸�
                     day = day + timedelta(days=1)
                 else:
                     break
+
             rtList.append(day.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
+
+        if sd in datetimeList:  # 시작날짜가 개장일이라면
+            rtList.insert(0, sd.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
+        else:  # 시작 날짜가 개장일이 아니면
+            while 1:
+               if sd not in datetimeList:  # 개장일에 포함되어 있으면
+                   sd = sd + timedelta(days=1)
+               else:
+                   break
+            rtList.insert(0, sd.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
+
+
 
     if month_type == '1':
         a = list(rrule(MONTHLY,
@@ -114,27 +127,32 @@ def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸�
                        until=parse(end_date)))  # 지정된 기간의 매월 첫 평일 (월초)
 
         if sd in datetimeList:  # 시작날짜가 개장일이라면
-            rtList.append(start_date)  # 날짜 포함
+            rtList.insert(0, sd.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
         else:  # 시작 날짜가 개장일이 아니면
             while 1:
                if sd not in datetimeList:  # 개장일에 포함되어 있으면
                    sd = sd + timedelta(days=1)
                else:
                    break
-               rtList.append(sd.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
+            rtList.insert(0, sd.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
 
         for day in a:
             while 1:
                 if day not in datetimeList:  # 개장일에 포함되어 있으면
-                    day = day + timedelta(days=1)
+                    day = day + timedelta(days=-1)
                 else:
                     break
             rtList.append(day.strftime('%Y-%m-%d'))  # yyyy-mm-dd 형식 변환
 
-    return rtList  # 납입 예정일 리스트 출력
+    rt = [] #중복 제거
+    for d in rtList:
+        if d not in rt:
+            rt.append(d)
+
+    return rt  # 납입 예정일 리스트 출력
 
 
 # print(getDailyDateInfo('2022-01-01', '2022-11-07'))
 # print(getYearlyDateInfo('2020-01-01', '2022-11-07'))
 # print(getPayInDateInfo('2020-01-01', '2022-09-07', '1'))
-# print(getRebalanceDateInfo('2020-01-01', '2022-11-07', '1', 3))
+# print(getRebalanceDateInfo('2017-10-11', '2018-05-01', '1', 3))

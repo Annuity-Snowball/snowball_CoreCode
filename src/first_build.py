@@ -5,11 +5,16 @@ import datetime as dt
 from pandas.tseries.offsets import *
 from pandas_datareader import data as pdr
 import pandas as pd
+import asyncio
 
 from getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
 db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8') 
-snowball=db.cursor() 
+snowball=db.cursor()
+
+# async def sangsu_test():
+#      backtest_object = Backtest('123456', 'teststrategy', 3000000, [30,30,40], '2017-10-01', '2018-05-01', 3, '0', 700000, [['PER 저', 2, 0, 0], ['PER 고', 3, 0, 0], ['PER', 3, 10, 15]])
+#      await backtest_object.doBacktest()
 
 # 포트폴리오 클래스 생성
 class Portfolio():
@@ -70,11 +75,11 @@ class Portfolio():
         # 데이터베이스에 업데이트하는 부분 - sql 쿼리문
         pass # 추후 수정 필요
     
-    def get_returns(self,df):
+    async def get_returns(self,df):
         df['return'] = (df['value'] - df['seed']) / df['seed']  # +df['cash'] #일별수익률 계산해서 열 추가 (월간수익률(납입일 기준),추가 가능)
         df['return'] = ((df['return'].round(4))*100).round(2)
     
-    def monthlyReturn(self,dict_realvalue):
+    async def monthlyReturn(self,dict_realvalue):
         # 입력: 포트폴리오 가치
         realValue = dict()
         rtDict = dict()
@@ -121,7 +126,7 @@ class Portfolio():
         return round((win_count) / (len(df.index)) * 100, 2)
 
     
-    def get_portVariables(self,dict_realvalue, dict_inputmoney):
+    async def get_portVariables(self,dict_realvalue, dict_inputmoney):
         portfolio_result = dict()
         values = dict()
         for key in dict_inputmoney.keys():
@@ -131,7 +136,7 @@ class Portfolio():
 
         df = pd.DataFrame.from_dict(values, orient='index', columns=['seed', 'value'])  # 넘겨받은 사전 데이터 데이터프레임으로 변환
 
-        self.get_returns(df)  # 수익률 계산
+        await self.get_returns(df)  # 수익률 계산
         win_rate = self.get_winRate(df)  # 승률 계산해서 저장 (리밸런싱 날짜 기준)
         # print(df)
         # print("승률: ", win_rate, "%")
@@ -141,19 +146,19 @@ class Portfolio():
         portfolio_result['포트폴리오 가치'] = df.iloc[-1, 1]  # 포트폴리오 가치 저장, 초기값: 수령 직전 가치
         
         portfolio_result['총 수익률'] = df.iloc[-1, 2]
-        portfolio_result['월 수익률 추이'] = self.monthlyReturn(dict_realvalue)
+        portfolio_result['월 수익률 추이'] = await self.monthlyReturn(dict_realvalue)
         portfolio_result['일별 수익률'] = dict(zip(df.index, df['return']))
         portfolio_result['승률'] = win_rate
 
         return portfolio_result
         
-    def cal_receiptValue(self,year, value):
+    async def cal_receiptValue(self,year, value):
         if year == 10:
             return value
         return value / (11 - year) * 1.2
     
     
-    def receipt_simul(self,portfolioResult, receiptYear):
+    async def receipt_simul(self,portfolioResult, receiptYear):
         # 수령 시뮬레이션
         # 연간 수령한도: 계좌평가액 / (11 - 연금수령연차) * 1.2 -> 1년간 자유롭게 나누어 수령 가능 (수령하지 않는 것도 가능) - 매년 1월 1일 기준으로 평가
         # 연 1,200만원 이상 수령 시, 종합소득세 부과 (16.5%)
@@ -173,7 +178,7 @@ class Portfolio():
         for i in range(1, receiptYear + 1):
             can_receiptValue = int(cum_value / (receiptYear - (i - 1)))  # 남은 금액을 남은 연차로 엔빵
             if i <= 10:  # 1~10년차의 경우
-                if can_receiptValue > self.cal_receiptValue(i, cum_value):
+                if can_receiptValue > await self.cal_receiptValue(i, cum_value):
                     can_receiptValue = int(self.cal_receiptValue(i, cum_value))  # 10년이내의 최대를 넘을 시 최대금액으로 제한
             if can_receiptValue > 12000000:  # 세액공제 한도 초과 시
                 can_receiptValue = 12000000  # 한도 범위인 1200만원으로 제한
@@ -191,7 +196,7 @@ class Portfolio():
 
         while cum_value2 > 0:
             if year <= 10:
-                can_receiptValue2 = int(self.cal_receiptValue(year, cum_value2))  # 당 해 수령가능 금액
+                can_receiptValue2 = int(await self.cal_receiptValue(year, cum_value2))  # 당 해 수령가능 금액
             else:
                 can_receiptValue2 = int(cum_value2)
 
@@ -212,7 +217,8 @@ class Portfolio():
         # print("수익률 평균: ", mean_return)
 
         if rtDict1['잔액'] > 0:
-            print("첫 번째 방식의 경우 잔액이 0보다 큽니다, 수령 기간을 늘리시길 권장드립니다.")
+            # print("첫 번째 방식의 경우 잔액이 0보다 큽니다, 수령 기간을 늘리시길 권장드립니다.")
+            pass
         rtList = [rtDict1, rtDict2]
         return rtList
     
@@ -297,17 +303,15 @@ class Backtest():
         
         self.portfolio_object = Portfolio( self.portfolio_id,self.portfolio_name, self.portfolio_start_money, self.strategy_ratio, self.portfolio_start_time, self.portfolio_end_time, self.rebalance_cycle, self.input_type, self.input_money)
         
-
-                                                                
-    
         for stratgy_input_info in self.stratgy_input_info_list: # '포트폴리오'를 구성하는 '전략의 개수'만큼 반복
             self.strategy_list.append(Strategy(*stratgy_input_info)) # 'Strategy() 클래스'를 이용해서 생성한 '전략'들을 '전략 리스트'에 추가
     
+        
 
             
             
     # 날짜지정이 안되어 있는 쿼리문에서 날짜를 지정하는 부분을 추가해서 반환하는 함수 - 리밸런싱 날짜들을 받자!
-    def getProductTicker(self, sql_query, interval_dates):
+    async def getProductTicker(self, sql_query, interval_dates):
 
         product_ticker_infos=list()
         
@@ -334,7 +338,7 @@ class Backtest():
     
     
     # 날짜에 대응하는 금융상품의 가격을 가져오는 함수
-    def getProductPrice(self, product_date, product_ticker):
+    async def getProductPrice(self, product_date, product_ticker):
         sql_query = "select high_price from price_"+product_ticker+" where product_date='"+product_date+"'"
 
         snowball.execute(sql_query) 
@@ -347,13 +351,13 @@ class Backtest():
       
       
     # '리밸런싱 하는 날에 새로 구매할 금융상품들과 가격'을 반환
-    def getPortfolioToRebalanceProductPrice(self, stratgy_sql_query_list, strategy_list, rebalance_date):
+    async def getPortfolioToRebalanceProductPrice(self, stratgy_sql_query_list, strategy_list, rebalance_date):
         
         portfolio_rebalance_product_price = list() # 반환할 '리밸런싱 할 때 구매할 금융상품들 가격' 리스트
         
         for i,sql_query in enumerate(stratgy_sql_query_list):
             
-            product_ticker_infos = self.getProductTicker(sql_query,[rebalance_date])
+            product_ticker_infos = await self.getProductTicker(sql_query,[rebalance_date])
 
             strategy_dict=dict()
             
@@ -362,7 +366,7 @@ class Backtest():
             for product_ticker_info in product_ticker_infos:
                 
                 for product_date,product_ticker in product_ticker_info:
-                    product_price_info= self.getProductPrice(product_date,product_ticker)
+                    product_price_info= await self.getProductPrice(product_date,product_ticker)
                     if product_date in product_dict:
                         product_dict[product_date].append(product_price_info)
                     else: 
@@ -378,7 +382,7 @@ class Backtest():
     
     
     # 리밸런싱 하는 날들에 새로 구매한 금융상품들과 그 개수를 반환, 잔액도 반환 - 리밸런싱에 사용
-    def getPortfolioRabalanceInfo(self, portfolio_rebalance_product_price, rebalance_input_money, strategy_ratio, test_date):
+    async def getPortfolioRabalanceInfo(self, portfolio_rebalance_product_price, rebalance_input_money, strategy_ratio, test_date):
         
         portfolio_rebalance_product_count=copy.deepcopy(portfolio_rebalance_product_price)
         
@@ -406,7 +410,7 @@ class Backtest():
         return rebalance_balance_account, portfolio_rebalance_product_count
     
     # 포트폴리오 내 새로 구매한 금융상품들 가치 반환
-    def getPortfolioProductValue(self, portfolio_rebalance_product_price, portfolio_rebalance_product_count):
+    async def getPortfolioProductValue(self, portfolio_rebalance_product_price, portfolio_rebalance_product_count):
         product_price = copy.deepcopy(portfolio_rebalance_product_price)
         product_count = copy.deepcopy(portfolio_rebalance_product_count)
         for i in range(len(product_price)):
@@ -425,7 +429,7 @@ class Backtest():
         return(product_price)
     
     # 포트폴리오 내 전략별 가치 반환
-    def getPortfolioStrategyValue(self,portfolio_rebalance_product_value):
+    async def getPortfolioStrategyValue(self,portfolio_rebalance_product_value):
         product_value = copy.deepcopy(portfolio_rebalance_product_value)
         for i in range(len(product_value)):
             price_strategy_key=list(product_value[i].keys())[0]
@@ -462,7 +466,7 @@ class Backtest():
             
             
     # 주기적으로 납입한 날의 새로 구매한 금융상품들 가격을 반환- 고정납입금액에 사용 
-    def getPortfolioProductPrice(self,portfolio_rebalance_product_price, test_date):
+    async def getPortfolioProductPrice(self,portfolio_rebalance_product_price, test_date):
         product_price = copy.deepcopy(portfolio_rebalance_product_price)
         for strategy_kind_dict in product_price:
             for strategy_kind_key in strategy_kind_dict.keys():
@@ -471,11 +475,11 @@ class Backtest():
                     continue
                 temp[test_date] = temp.pop(list(temp.keys())[0])
                 for i,product_list in enumerate(temp[test_date]):
-                    temp[test_date][i] = self.getProductPrice(test_date,product_list[0])
+                    temp[test_date][i] = await self.getProductPrice(test_date,product_list[0])
         return product_price  
     
      # 주기적으로 납입한 날의 새로 구매한 금융상품들 개수을 반환 - 
-    def getPortfolioProductInfo(self,portfolio_product_price,input_money,strategy_ratio, test_date):
+    async def getPortfolioProductInfo(self,portfolio_product_price,input_money,strategy_ratio, test_date):
         
         # 복사를 통해서 portfolio_history 생성
         portfolio_product_count=copy.deepcopy(portfolio_product_price)
@@ -503,7 +507,7 @@ class Backtest():
 
 
     # 누적되는 금융상품개수 구하는 함수, 후자의 파라미터가 새로 구매한 금융상품 개수
-    def getPortfolioProductAccumulateCount(self,Portfolio_rebalance_product_count,Portfolio_product_count):
+    async def getPortfolioProductAccumulateCount(self,Portfolio_rebalance_product_count,Portfolio_product_count):
         
         portfolio_rebalance_product_count = copy.deepcopy(Portfolio_rebalance_product_count)
         portfolio_product_count = copy.deepcopy(Portfolio_product_count)
@@ -524,14 +528,14 @@ class Backtest():
         return portfolio_product_count
 
     # 잔액포함 포트폴리오 가치 반환하는 함수
-    def getRealPortfolioValue(self,total_portfolio_account,total_balance_account):
+    async def getRealPortfolioValue(self,total_portfolio_account,total_balance_account):
         real_portfolio_account = dict()
 
         for portfolio_key in total_portfolio_account.keys():
             real_portfolio_account[portfolio_key]=total_portfolio_account[portfolio_key]+total_balance_account[portfolio_key]
         return real_portfolio_account
     
-    def updateToRecentDate(self,portfolio_product_count_account,new_date):
+    async def updateToRecentDate(self,portfolio_product_count_account,new_date):
         for i in range(len(portfolio_product_count_account)):
             price_strategy_key=list(portfolio_product_count_account[i].keys())[0]
             price_strategy_value=portfolio_product_count_account[i][price_strategy_key]
@@ -540,7 +544,7 @@ class Backtest():
             price_strategy_value[new_date]=price_strategy_value.pop(list(price_strategy_value.keys())[0])
         return(portfolio_product_count_account)
           
-    def doBacktest(self):
+    async def doBacktest(self):
         
                 # 백테스트 함수 사용하기 위해서 리스트들 생성
         self.stratgy_kind_list = list() # '전략종류들을 담을 리스트' 생성 - '포트폴리오'를 구성하는 모든 '전략'들의 '전략종류'들이 담김
@@ -552,17 +556,17 @@ class Backtest():
             
             
         # 시작날짜와 끝날짜 사이에 존채하는 모든 날짜들을 담은 리스트
-        self.backtesting_date_list = getDailyDateInfo(self.portfolio_start_time, self.portfolio_end_time)
+        self.backtesting_date_list = await getDailyDateInfo(self.portfolio_start_time, self.portfolio_end_time)
         
         # 리벨러스를 하는 날짜들 리스트(테스트용)
-        self.rebalance_date_list = getRebalanceDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type, self.rebalance_cycle) # 리밸런싱 첫번째 날짜가 test_dates와 시작이 같아야 한다
-        print('리밸런싱 날짜들 :',self.rebalance_date_list)
+        self.rebalance_date_list = await getRebalanceDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type, self.rebalance_cycle) # 리밸런싱 첫번째 날짜가 test_dates와 시작이 같아야 한다
+        # print('리밸런싱 날짜들 :',self.rebalance_date_list)
         # 납입하는 날짜들을 담은 리스트(테스트용)
-        self.input_date_list = getPayInDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type) # 납입한 날짜는 첫번째 날짜는 포함X
-        print('납입 날짜들 :',self.input_date_list)
+        self.input_date_list = await getPayInDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type) # 납입한 날짜는 첫번째 날짜는 포함X
+        # print('납입 날짜들 :',self.input_date_list)
         # 세제혜택을 받는 날짜들을 남은 리스트
-        self.tax_benfit_date_list = getYearlyDateInfo(self.portfolio_start_time, self.portfolio_end_time)
-        print('세제혜택 날짜들 :',self.tax_benfit_date_list)
+        self.tax_benfit_date_list = await getYearlyDateInfo(self.portfolio_start_time, self.portfolio_end_time)
+        # print('세제혜택 날짜들 :',self.tax_benfit_date_list)
         
         # self.rebalance_date_list=['2017-10-10','2018-01-02','2018-04-02']
         # self.input_date_list=['2017-11-01','2017-12-01','2018-01-02','2018-02-01','2018-03-02','2018-04-02']
@@ -627,26 +631,26 @@ class Backtest():
                     # print(recent_rebalance_date, "리밸런싱")
                     # print("==================================")
                     # 리밸런싱 할 때 구매할 금융상품들 가격 구함
-                    portfolio_product_price = self.getPortfolioToRebalanceProductPrice(self.stratgy_sql_query_list, self.stratgy_kind_list, recent_rebalance_date)
+                    portfolio_product_price = await self.getPortfolioToRebalanceProductPrice(self.stratgy_sql_query_list, self.stratgy_kind_list, recent_rebalance_date)
                     # print('리밸런싱 할 때 구매할 금융상품들 가격 :',portfolio_product_price)
                     
                     # print('리밸런싱할 금액',current_portfolio_amount_without_balance+current_balance_amount) # 리밸런싱할 금액은 '포트폴리오가치(잔액X)'+'잔액' 이다
                     
-                    rebalance_balance_account, self.portfolio_product_count_account = self.getPortfolioRabalanceInfo(portfolio_product_price,current_portfolio_amount_without_balance+current_balance_amount, self.strategy_ratio, recent_rebalance_date)
+                    rebalance_balance_account, self.portfolio_product_count_account = await self.getPortfolioRabalanceInfo(portfolio_product_price,current_portfolio_amount_without_balance+current_balance_amount, self.strategy_ratio, recent_rebalance_date)
                     # print('리밸런싱 후 금융상품들 개수 :', self.portfolio_product_count_account)
                     # print("리밸런싱 후 잔액 :", rebalance_balance_account)
                     
-                    portfolio_rebalance_product_value= self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
+                    portfolio_rebalance_product_value= await self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
                     # print('리밸런싱 후 금융상품들 가치 :',portfolio_rebalance_product_value)
                     
-                    portfolio_rebalance_strategy_value=self.getPortfolioStrategyValue(portfolio_rebalance_product_value)
+                    portfolio_rebalance_strategy_value= await self.getPortfolioStrategyValue(portfolio_rebalance_product_value)
                     # print('리밸런싱 후 전략별 가치 :',portfolio_rebalance_strategy_value)
                     
-                    total_portfolio_without_balance_account[recent_rebalance_date]=self.getPortfolioValueWithoutBalance(portfolio_rebalance_strategy_value)[recent_rebalance_date]
-                    current_portfolio_amount_without_balance = total_portfolio_without_balance_account[recent_rebalance_date]
+                    total_portfolio_without_balance_account[backtesting_date] = self.getPortfolioValueWithoutBalance(portfolio_rebalance_strategy_value).get(recent_rebalance_date)
+                    current_portfolio_amount_without_balance = total_portfolio_without_balance_account[backtesting_date]
                     # print('리밸런싱 후 포트폴리오 가치(잔액포함X) :',current_portfolio_amount_without_balance)
                     
-                    self.portfolio_balance_account[recent_rebalance_date] = rebalance_balance_account[recent_rebalance_date]
+                    self.portfolio_balance_account[backtesting_date] = rebalance_balance_account[backtesting_date]
                     # print('리밸런싱 후 포트폴리오 잔액기록 :', self.portfolio_balance_account)
                     
                     
@@ -659,25 +663,25 @@ class Backtest():
                     # print("==================================")
                     # print(backtesting_date, "납입날짜")
                     # print("==================================")
-                    portfolio_product_price=self.getPortfolioProductPrice(portfolio_product_price, backtesting_date)
+                    portfolio_product_price = await self.getPortfolioProductPrice(portfolio_product_price, backtesting_date)
                     # print('납부때마다 구매할 금융상품들 가격',portfolio_product_price)
                     # print('주기적 납부하는 돈 :', self.input_money)
                     
                     tax_benefit_money += self.input_money # 세졔혜택 받을 금액에 추가
                     # print('상품 구매할 사용할 금액 :', self.input_money + current_balance_amount)
                     
-                    input_balance_account,new_portfolio_product_count=self.getPortfolioProductInfo(portfolio_product_price, self.input_money+current_balance_amount, self.strategy_ratio, backtesting_date)
+                    input_balance_account,new_portfolio_product_count= await self.getPortfolioProductInfo(portfolio_product_price, self.input_money+current_balance_amount, self.strategy_ratio, backtesting_date)
                     # print('납부때마다 추가되는 금융상품 개수 :',new_portfolio_product_count)
                     # print('납부때마다 추가되는 잔액 :',input_balance_account)
                     current_balance_amount = input_balance_account[list(input_balance_account.keys())[-1]]
                     
-                    self.portfolio_product_count_account = self.getPortfolioProductAccumulateCount(self.portfolio_product_count_account, new_portfolio_product_count)
+                    self.portfolio_product_count_account = await self.getPortfolioProductAccumulateCount(self.portfolio_product_count_account, new_portfolio_product_count)
                     # print('누적 금융상품 개수 :', self.portfolio_product_count_account)
                     
-                    portfolio_product_value=self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
+                    portfolio_product_value=await self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
                     # print('누적 금융상품들 가치 :',portfolio_product_value)
                     
-                    portfolio_strategy_value=self.getPortfolioStrategyValue(portfolio_product_value)
+                    portfolio_strategy_value=await self.getPortfolioStrategyValue(portfolio_product_value)
                     # print('누적 전략별 가치 :',portfolio_strategy_value)
                     
                     total_portfolio_without_balance_account[backtesting_date] = self.getPortfolioValueWithoutBalance(portfolio_strategy_value)[backtesting_date]
@@ -697,16 +701,17 @@ class Backtest():
                     # print("==================================")
                     # print(backtesting_date, "나머지경우")
                     # print("==================================")
-                    portfolio_product_price=self.getPortfolioProductPrice(portfolio_product_price, backtesting_date)
+                    # portfolio_product_price = list()
+                    portfolio_product_price= await self.getPortfolioProductPrice(portfolio_product_price, backtesting_date)
                     # print(backtesting_date,'금융상품 가격 :',portfolio_product_price)
                 
-                    self.portfolio_product_count_account=self.updateToRecentDate(self.portfolio_product_count_account,backtesting_date)
+                    self.portfolio_product_count_account= await self.updateToRecentDate(self.portfolio_product_count_account,backtesting_date)
                     # print(backtesting_date,'금융상품 개수 :',self.portfolio_product_count_account)
                     
-                    portfolio_product_value = self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
+                    portfolio_product_value = await self.getPortfolioProductValue(portfolio_product_price, self.portfolio_product_count_account)
                     # print(backtesting_date,'금융상품들 가치 :',portfolio_product_value)
                     
-                    portfolio_strategy_value = self.getPortfolioStrategyValue(portfolio_product_value)
+                    portfolio_strategy_value = await self.getPortfolioStrategyValue(portfolio_product_value)
                     # print(backtesting_date,'전략별 가치 :',portfolio_strategy_value)
                     
                     total_portfolio_without_balance_account[backtesting_date]= self.getPortfolioValueWithoutBalance(portfolio_strategy_value)[backtesting_date]
@@ -723,28 +728,29 @@ class Backtest():
             if tax == 0: # 세제혜택 X 인 경우 결과값들 입력
                 # print('포트폴리오 가치 추이(잔액포함X):',total_portfolio_without_balance_account)
                 # print('포트폴리오 잔액 추이:',self.portfolio_balance_account)
-                real_portfolio_account=self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account) # 포트폴리오 가치 추이
-                self.portfolio_object.portfolio_account_without_tax_benefit = self.portfolio_object.get_portVariables(real_portfolio_account, self.input_money_to_portfolio) # 포트폴리오 출력결과 변수
-                self.portfolio_object.portfolio_receive_without_tax_benefit = self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_without_tax_benefit,10) # 포트폴리오 수령방법, 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
+                real_portfolio_account= await self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account) # 포트폴리오 가치 추이
+                self.portfolio_object.portfolio_account_without_tax_benefit = await self.portfolio_object.get_portVariables(real_portfolio_account, self.input_money_to_portfolio) # 포트폴리오 출력결과 변수
+                self.portfolio_object.portfolio_receive_without_tax_benefit = await self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_without_tax_benefit,10) # 포트폴리오 수령방법, 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
 
             elif tax == 1:# 세제혜택 0 인 경우 결과값들 입력
                 # print('포트폴리오 가치 추이(잔액포함X):',total_portfolio_without_balance_account)
                 # print('포트폴리오 잔액 추이:',self.portfolio_balance_account)
-                real_portfolio_account_tax_benefit=self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account)
-                self.portfolio_object.portfolio_account_with_tax_benefit = self.portfolio_object.get_portVariables(real_portfolio_account_tax_benefit, self.input_money_to_portfolio)
-                self.portfolio_object.portfolio_receive_with_tax_benefit = self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_with_tax_benefit,10) # 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
+                real_portfolio_account_tax_benefit=await self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account)
+                self.portfolio_object.portfolio_account_with_tax_benefit = await self.portfolio_object.get_portVariables(real_portfolio_account_tax_benefit, self.input_money_to_portfolio)
+                self.portfolio_object.portfolio_receive_with_tax_benefit = await self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_with_tax_benefit,10) # 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
+                    
+        print('포트폴리오 결과 :',self.portfolio_object.portfolio_account_without_tax_benefit)
+        print()
+        print('포트폴리오 결과 :',self.portfolio_object.portfolio_account_with_tax_benefit)
     
-    
-    
-    
-
  
 # 실행하는 부분이 메인함수이면 실행 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-    
+    loop = asyncio.get_event_loop()     
 
-#     backtest_object = Backtest('123456', 'teststrategy', 3000000, [30,30,40], '2017-10-01', '2018-05-01', 3, '0', 700000, [['PER 저', 2, 0, 0], ['PER 고', 3, 0, 0], ['PER', 3, 10, 15]])
+    backtest_object = Backtest('123456', 'teststrategy', 3000000, [30,30,40], '2017-10-01', '2018-05-01', 3, '0', 700000, [['PER 저', 2, 0, 0], ['PER 고', 3, 0, 0], ['PER', 3, 10, 15]])
 
-#     backtest_object.doBacktest()
-#     db.close()  
+    loop.run_until_complete(backtest_object.doBacktest()) 
+    loop.close()
+    db.close()  

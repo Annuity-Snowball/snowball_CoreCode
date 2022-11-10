@@ -3,13 +3,15 @@ import pymysql
 import copy
 import datetime as dt
 from pandas.tseries.offsets import *
+from pandas_datareader import data as pdr
 import pandas as pd
 
 from getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
+db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8') 
+snowball=db.cursor() 
 
-
-# 포트폴리오 클래스 생성``
+# 포트폴리오 클래스 생성
 class Portfolio():
     """
     포트폴리오 클래스 입니다
@@ -210,17 +212,10 @@ class Portfolio():
         # print("수익률 평균: ", mean_return)
 
         if rtDict1['잔액'] > 0:
-            # print("첫 번째 방식의 경우 잔액이 0보다 큽니다, 수령 기간을 늘리시길 권장드립니다.")
-            pass
+            print("첫 번째 방식의 경우 잔액이 0보다 큽니다, 수령 기간을 늘리시길 권장드립니다.")
         rtList = [rtDict1, rtDict2]
         return rtList
     
-    
-    def get_portfolio_without_tax_benefit(self):
-        pass
-
-    def get_portfolio_with_tax_benefit(self):
-        pass
     
               
 # 전략 클래스 생성
@@ -282,7 +277,7 @@ class Strategy():
 
 
 
-class backtest():
+class Backtest():
     def __init__(self,portfolio_id, portfolio_name, portfolio_start_money, strategy_ratio, portfolio_start_time, 
                 portfolio_end_time, rebalance_cycle, input_type, input_money,stratgy_input_info_list):
         
@@ -545,7 +540,7 @@ class backtest():
             price_strategy_value[new_date]=price_strategy_value.pop(list(price_strategy_value.keys())[0])
         return(portfolio_product_count_account)
           
-    def do_backtest(self):
+    def doBacktest(self):
         
                 # 백테스트 함수 사용하기 위해서 리스트들 생성
         self.stratgy_kind_list = list() # '전략종류들을 담을 리스트' 생성 - '포트폴리오'를 구성하는 모든 '전략'들의 '전략종류'들이 담김
@@ -561,12 +556,13 @@ class backtest():
         
         # 리벨러스를 하는 날짜들 리스트(테스트용)
         self.rebalance_date_list = getRebalanceDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type, self.rebalance_cycle) # 리밸런싱 첫번째 날짜가 test_dates와 시작이 같아야 한다
-
+        print('리밸런싱 날짜들 :',self.rebalance_date_list)
         # 납입하는 날짜들을 담은 리스트(테스트용)
         self.input_date_list = getPayInDateInfo(self.portfolio_start_time, self.portfolio_end_time, self.input_type) # 납입한 날짜는 첫번째 날짜는 포함X
-        
+        print('납입 날짜들 :',self.input_date_list)
         # 세제혜택을 받는 날짜들을 남은 리스트
         self.tax_benfit_date_list = getYearlyDateInfo(self.portfolio_start_time, self.portfolio_end_time)
+        print('세제혜택 날짜들 :',self.tax_benfit_date_list)
         
         # self.rebalance_date_list=['2017-10-10','2018-01-02','2018-04-02']
         # self.input_date_list=['2017-11-01','2017-12-01','2018-01-02','2018-02-01','2018-03-02','2018-04-02']
@@ -585,12 +581,12 @@ class backtest():
         
             tax_benefit_money = self.portfolio_start_money # 세제혜택을 받을 금액을 초기 금액으로 설정
 
-            rebalanced_money_without_balance = self.portfolio_start_money
+            current_portfolio_amount_without_balance = 0
 
             
             total_portfolio_without_balance_account = dict() # 날짜 별로 잔액을 제외한 포트폴리오 가치 히스토리
             
-            current_balance_amount = 0 # 현재 잔액 총합 초기화
+            current_balance_amount = self.portfolio_start_money
             
             recent_rebalance_date = None # 가장 최근 리밸런싱 한 날짜
             
@@ -612,6 +608,7 @@ class backtest():
                         tax_benefit_money *= 0.165 # 금액의 16.5% 금액을 환급
                     # print('세제환급 받을 금액 :', tax_benefit_money)
                     current_balance_amount += tax_benefit_money
+                    # print('세제혜택 받은 후 현재 총 잔액 : ',current_balance_amount)
                     tax_benefit_money =0 # 세제혜택 받을 금액으로 0원으로 초기화
                     # print()
                     
@@ -622,7 +619,7 @@ class backtest():
                     # '조회날짜'가 '납입날짜 리스트'에 있고, '조회날짜'가 '리밸런싱 날짜리스트'의 첫번째 날짜가 아니면(리밸런싱하는 첫번째 날이면 납입금액을 더하지 않아야 하므로)
                     if backtesting_date in self.input_date_list and backtesting_date != self.rebalance_date_list[0]:
                         # '초기금액'에 '납입금액'을 더한다 -> '리밸런싱할 금액'을 구한다!
-                        rebalanced_money_without_balance+=self.input_money
+                        current_portfolio_amount_without_balance+=self.input_money
                         tax_benefit_money += self.input_money # 세제혜택을 받을 금액에 납입금액을 더함
                         
                     recent_rebalance_date = backtesting_date # '최근 리밸런싱한 날짜'를 갱신
@@ -633,9 +630,9 @@ class backtest():
                     portfolio_product_price = self.getPortfolioToRebalanceProductPrice(self.stratgy_sql_query_list, self.stratgy_kind_list, recent_rebalance_date)
                     # print('리밸런싱 할 때 구매할 금융상품들 가격 :',portfolio_product_price)
                     
-                    # print('리밸런싱할 금액',rebalanced_money_without_balance+current_balance_amount) # 리밸런싱할 금액은 '포트폴리오가치(잔액X)'+'잔액' 이다
+                    # print('리밸런싱할 금액',current_portfolio_amount_without_balance+current_balance_amount) # 리밸런싱할 금액은 '포트폴리오가치(잔액X)'+'잔액' 이다
                     
-                    rebalance_balance_account, self.portfolio_product_count_account = self.getPortfolioRabalanceInfo(portfolio_product_price,rebalanced_money_without_balance+current_balance_amount, self.strategy_ratio, recent_rebalance_date)
+                    rebalance_balance_account, self.portfolio_product_count_account = self.getPortfolioRabalanceInfo(portfolio_product_price,current_portfolio_amount_without_balance+current_balance_amount, self.strategy_ratio, recent_rebalance_date)
                     # print('리밸런싱 후 금융상품들 개수 :', self.portfolio_product_count_account)
                     # print("리밸런싱 후 잔액 :", rebalance_balance_account)
                     
@@ -645,17 +642,18 @@ class backtest():
                     portfolio_rebalance_strategy_value=self.getPortfolioStrategyValue(portfolio_rebalance_product_value)
                     # print('리밸런싱 후 전략별 가치 :',portfolio_rebalance_strategy_value)
                     
-                    portfolio_rebalance_value_without_balance=self.getPortfolioValueWithoutBalance(portfolio_rebalance_strategy_value)
-                    total_portfolio_without_balance_account[recent_rebalance_date]=portfolio_rebalance_value_without_balance[recent_rebalance_date]
-                    # print('리밸런싱 후 포트폴리오 가치(잔액포함X) :',total_portfolio_without_balance_account)
+                    total_portfolio_without_balance_account[recent_rebalance_date]=self.getPortfolioValueWithoutBalance(portfolio_rebalance_strategy_value)[recent_rebalance_date]
+                    current_portfolio_amount_without_balance = total_portfolio_without_balance_account[recent_rebalance_date]
+                    # print('리밸런싱 후 포트폴리오 가치(잔액포함X) :',current_portfolio_amount_without_balance)
                     
                     self.portfolio_balance_account[recent_rebalance_date] = rebalance_balance_account[recent_rebalance_date]
                     # print('리밸런싱 후 포트폴리오 잔액기록 :', self.portfolio_balance_account)
-                    # print()
+                    
                     
                     # 리밸런싱 할 때 마다 잔액 총합을 리밸런싱 하고 나서 나온 잔액을 잔액총합으로 설정
                     current_balance_amount =self.portfolio_balance_account[recent_rebalance_date]
-                
+                    # print(recent_rebalance_date,"리밸런싱 후 현재 잔액 : ",current_balance_amount)
+                    # print()
                 # 날씨가 납입날짜에 있으면
                 elif backtesting_date in self.input_date_list:
                     # print("==================================")
@@ -666,10 +664,12 @@ class backtest():
                     # print('주기적 납부하는 돈 :', self.input_money)
                     
                     tax_benefit_money += self.input_money # 세졔혜택 받을 금액에 추가
+                    # print('상품 구매할 사용할 금액 :', self.input_money + current_balance_amount)
                     
-                    input_balance_account,new_portfolio_product_count=self.getPortfolioProductInfo(portfolio_product_price, self.input_money, self.strategy_ratio, backtesting_date)
+                    input_balance_account,new_portfolio_product_count=self.getPortfolioProductInfo(portfolio_product_price, self.input_money+current_balance_amount, self.strategy_ratio, backtesting_date)
                     # print('납부때마다 추가되는 금융상품 개수 :',new_portfolio_product_count)
                     # print('납부때마다 추가되는 잔액 :',input_balance_account)
+                    current_balance_amount = input_balance_account[list(input_balance_account.keys())[-1]]
                     
                     self.portfolio_product_count_account = self.getPortfolioProductAccumulateCount(self.portfolio_product_count_account, new_portfolio_product_count)
                     # print('누적 금융상품 개수 :', self.portfolio_product_count_account)
@@ -680,19 +680,17 @@ class backtest():
                     portfolio_strategy_value=self.getPortfolioStrategyValue(portfolio_product_value)
                     # print('누적 전략별 가치 :',portfolio_strategy_value)
                     
-                    portfolio_rebalance_value = self.getPortfolioValueWithoutBalance(portfolio_strategy_value)
-                    total_portfolio_without_balance_account[backtesting_date]=portfolio_rebalance_value[backtesting_date]
+                    total_portfolio_without_balance_account[backtesting_date] = self.getPortfolioValueWithoutBalance(portfolio_strategy_value)[backtesting_date]
                     # print('납입한 후 포트폴리오 가치(잔액포함X) :',  total_portfolio_without_balance_account)
                     
                     # 포트폴리오 가치 총합을 갱신
-                    rebalanced_money_without_balance = total_portfolio_without_balance_account[backtesting_date]  # 잔액 제외 하고 리밸런싱할 금액을 갱신
+                    current_portfolio_amount_without_balance = total_portfolio_without_balance_account[backtesting_date]  # 잔액 제외 하고 리밸런싱할 금액을 갱신
+                    # print(backtesting_date,'포트폴리오 가치(잔액포함X) :',current_portfolio_amount_without_balance)
                     
+                    self.portfolio_balance_account[backtesting_date] = current_balance_amount
                     
-                    self.portfolio_balance_account[backtesting_date] = self.portfolio_balance_account[list(self.portfolio_balance_account.keys())[-1]] + input_balance_account[backtesting_date]
-                    
-                    
-                    current_balance_amount = self.portfolio_balance_account[list(self.portfolio_balance_account.keys())[-1]]
-                    # print('납입한 후 리밸런싱 전까지 잔액 총합 :',current_balance_amount)
+                
+                    # print(backtesting_date,"현재 잔액 : ",current_balance_amount)
                     # print()
                     
                 else:
@@ -711,63 +709,42 @@ class backtest():
                     portfolio_strategy_value = self.getPortfolioStrategyValue(portfolio_product_value)
                     # print(backtesting_date,'전략별 가치 :',portfolio_strategy_value)
                     
-                    portfolio_rebalance_value= self.getPortfolioValueWithoutBalance(portfolio_strategy_value)
-                    total_portfolio_without_balance_account[backtesting_date]=portfolio_rebalance_value[backtesting_date]
-                    # print(backtesting_date,'포트폴리오 가치(잔액포함X) :',total_portfolio_without_balance_account)
+                    total_portfolio_without_balance_account[backtesting_date]= self.getPortfolioValueWithoutBalance(portfolio_strategy_value)[backtesting_date]
+                    current_portfolio_amount_without_balance = total_portfolio_without_balance_account[backtesting_date]
+                    # print(backtesting_date,'포트폴리오 가치(잔액포함X) :', current_portfolio_amount_without_balance)
                     
                     # 포트폴리오 가치 총합을 갱신
-                    rebalanced_money_without_balance = total_portfolio_without_balance_account[backtesting_date]
-                    self.portfolio_balance_account[backtesting_date] = self.portfolio_balance_account[list(self.portfolio_balance_account.keys())[-1]]
-                    # print('누적 후 잔액기록 :',total_balance_account)
+                    
+                    self.portfolio_balance_account[backtesting_date] = current_balance_amount
+                    # print(backtesting_date,"현재 잔액 : ",current_balance_amount)
                     # print()
             
             # print()
             if tax == 0: # 세제혜택 X 인 경우 결과값들 입력
+                # print('포트폴리오 가치 추이(잔액포함X):',total_portfolio_without_balance_account)
+                # print('포트폴리오 잔액 추이:',self.portfolio_balance_account)
                 real_portfolio_account=self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account) # 포트폴리오 가치 추이
                 self.portfolio_object.portfolio_account_without_tax_benefit = self.portfolio_object.get_portVariables(real_portfolio_account, self.input_money_to_portfolio) # 포트폴리오 출력결과 변수
                 self.portfolio_object.portfolio_receive_without_tax_benefit = self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_without_tax_benefit,10) # 포트폴리오 수령방법, 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
 
             elif tax == 1:# 세제혜택 0 인 경우 결과값들 입력
+                # print('포트폴리오 가치 추이(잔액포함X):',total_portfolio_without_balance_account)
+                # print('포트폴리오 잔액 추이:',self.portfolio_balance_account)
                 real_portfolio_account_tax_benefit=self.getRealPortfolioValue(total_portfolio_without_balance_account,self.portfolio_balance_account)
                 self.portfolio_object.portfolio_account_with_tax_benefit = self.portfolio_object.get_portVariables(real_portfolio_account_tax_benefit, self.input_money_to_portfolio)
                 self.portfolio_object.portfolio_receive_with_tax_benefit = self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_with_tax_benefit,10) # 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
-        
+    
+    
+    
+    
 
-        # print("*************** 세제혜택X ***************")
-        # print()
-        # print('포트폴리오 가치 추이(잔액포함0):',real_portfolio_account)
-        # print()
-        # print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio)
-        # print()
-        # print('포트폴리오 결과 :',self.portfolio_object.portfolio_account_without_tax_benefit)
-        # print()
-        # print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_without_tax_benefit)
-        
-        # print()
-        # print("*************** 세제혜택0 ***************")
-        # print()
-        # print('포트폴리오 가치 추이(잔액포함0):',real_portfolio_account_tax_benefit)
-        # print()
-        # print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio)
-        # print()
-        # print('포트폴리오 결과 :', self.portfolio_object.portfolio_account_with_tax_benefit)
-        # print()
-        # print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_with_tax_benefit)
-    
-    
-    
-    
-def sendData():
-    
-    
  
 # 실행하는 부분이 메인함수이면 실행 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8') 
-    snowball=db.cursor() 
+    
 
-    backtest_object = backtest('123456', 'test', 1000000, [40,60], '2017-10-01', '2018-05-01', 3, '0', 600000, [['PER 저', 2, 0, 0], ['PER 고', 3, 0, 0]])
+#     backtest_object = Backtest('123456', 'teststrategy', 3000000, [30,30,40], '2017-10-01', '2018-05-01', 3, '0', 700000, [['PER 저', 2, 0, 0], ['PER 고', 3, 0, 0], ['PER', 3, 10, 15]])
 
-    backtest_object.do_backtest()
-    db.close()  
+#     backtest_object.doBacktest()
+#     db.close()  

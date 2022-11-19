@@ -8,14 +8,14 @@ from datetime import datetime
 from datetime import timedelta
 warnings.simplefilter(action='ignore', category=FutureWarning)  # FutureWaring 제거
 
-opendf = pd.read_csv('./openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
+opendf = pd.read_csv('openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
 opendf['Opendate'] = pd.to_datetime(opendf['Opendate'], format='%Y-%m-%d', errors='raise')  # 원소를 datetime타입으로 변경
 datetimeList = []
 for date in opendf['Opendate']:
     date = pd.Timestamp(date).strftime('%Y-%m-%d')
     datetimeList.append(datetime.strptime(date, '%Y-%m-%d'))
 
-async def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계산 (월초: 0, 월말: 1)
+def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계산 (월초: 0, 월말: 1)
 
     rtList = []
 
@@ -52,7 +52,7 @@ async def getPayInDateInfo(start_date, end_date, month_type):  # 납입일 계�
     return rtList  # 납입 예정일 리스트 출력
 
 
-async def getDailyDateInfo(start_date, end_date):
+def getDailyDateInfo(start_date, end_date):
     rtList = []
 
     for day in opendf['Opendate'][start_date:end_date]:
@@ -61,7 +61,7 @@ async def getDailyDateInfo(start_date, end_date):
     return rtList
 
 
-async def getYearlyDateInfo(start_date, end_date):
+def getYearlyDateInfo(start_date, end_date):
     rtList = []
 
     a = list(rrule(YEARLY,
@@ -81,7 +81,7 @@ async def getYearlyDateInfo(start_date, end_date):
     return rtList
 
 
-async def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸런싱 날짜 계산 (월초 or 월말)
+def getRebalanceDateInfo(start_date, end_date, month_type, interval):  # 리밸런싱 날짜 계산 (월초 or 월말)
     rtList = []  # 반환할 리스트
 
     sd = datetime.strptime(start_date, '%Y-%m-%d')  # 시작날짜 저장

@@ -6,7 +6,7 @@ from pandas.tseries.offsets import *
 from pandas_datareader import data as pdr
 import pandas as pd
 
-from src.getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
+from src.core.getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
 db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8')
 snowball=db.cursor()
@@ -534,26 +534,26 @@ class Backtest(Portfolio):
                 self.portfolio_object.portfolio_account_with_tax_benefit = self.portfolio_object.get_portVariables(self.portfolio_with_tax_benefit_account, self.input_money_to_portfolio_account)
                 self.portfolio_object.portfolio_receive_with_tax_benefit = self.portfolio_object.receipt_simul(self.portfolio_object.portfolio_account_with_tax_benefit,10) # 몇년 수령할지 입력(10년 디폴트이고 나중에 사용자 맞게 수정 가능)
         
-        print("*************** 세제혜택X ***************")
-        print()
-        print('포트폴리오 가치 추이(잔액포함0):',self.portfolio_without_tax_benefit_account)
-        print()
-        print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio_account)
-        print()
-        print('포트폴리오 결과 :',self.portfolio_object.portfolio_account_without_tax_benefit)
-        print()
-        print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_without_tax_benefit)
-        
-        print()
-        print("*************** 세제혜택0 ***************")
-        print()
-        print('포트폴리오 가치 추이(잔액포함0):',self.portfolio_with_tax_benefit_account)
-        print()
-        print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio_account)
-        print()
-        print('포트폴리오 결과 :', self.portfolio_object.portfolio_account_with_tax_benefit)
-        print()
-        print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_with_tax_benefit)
+        # print("*************** 세제혜택X ***************")
+        # print()
+        # print('포트폴리오 가치 추이(잔액포함0):',self.portfolio_without_tax_benefit_account)
+        # print()
+        # print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio_account)
+        # print()
+        # print('포트폴리오 결과 :',self.portfolio_object.portfolio_account_without_tax_benefit)
+        # print()
+        # print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_without_tax_benefit)
+        #
+        # print()
+        # print("*************** 세제혜택0 ***************")
+        # print()
+        # print('포트폴리오 가치 추이(잔액포함0):',self.portfolio_with_tax_benefit_account)
+        # print()
+        # print('포트폴리오 납입금액 추이:', self.input_money_to_portfolio_account)
+        # print()
+        # print('포트폴리오 결과 :', self.portfolio_object.portfolio_account_with_tax_benefit)
+        # print()
+        # print('포트폴리오 수령방법 :',self.portfolio_object.portfolio_receive_with_tax_benefit)
     
 
  

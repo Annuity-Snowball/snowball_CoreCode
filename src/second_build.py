@@ -6,9 +6,10 @@ from pandas.tseries.offsets import *
 from pandas_datareader import data as pdr
 import pandas as pd
 
-from getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
+from src.getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
-
+db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8')
+snowball=db.cursor()
 
 # 포트폴리오 클래스 생성
 class Portfolio():
@@ -278,7 +279,7 @@ class Strategy():
 
 class Backtest(Portfolio):
     def __init__(self,portfolio_id, portfolio_name, portfolio_start_money, strategy_ratio_list, portfolio_start_time, 
-                portfolio_end_time, rebalance_cycle, input_type, input_money,stratgy_input_info_list):
+                portfolio_end_time, rebalance_cycle, input_type, input_money, stratgy_input_info_list):
         
         
         self.portfolio_id = portfolio_id

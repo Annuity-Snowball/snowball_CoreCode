@@ -20,7 +20,6 @@ async def backtestAPI(portfolioInput: Portfolio):
         "result_without_tax": backtest_object.portfolio_object.portfolio_account_without_tax_benefit,
         "recieve_with_tax": backtest_object.portfolio_object.portfolio_receive_without_tax_benefit,
         "recieve_without_tax": backtest_object.portfolio_object.portfolio_receive_without_tax_benefit
-
     }
 
 def setBackTest(portfolioInput: Portfolio):

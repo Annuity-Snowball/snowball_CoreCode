@@ -5,10 +5,26 @@ import datetime as dt
 from pandas.tseries.offsets import *
 from pandas_datareader import data as pdr
 import pandas as pd
+import configparser
 
 from src.core.getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
-db = pymysql.connect(host='localhost', port=3306, user='snowball_test', passwd='909012', db='snowball_core', charset='utf8')
+config = configparser.ConfigParser()
+config.read('src/core/config.ini')
+db_host=config['DB']['HOST']
+db_user=config['DB']['USER']
+db_port=int(config['DB']['PORT'])
+db_pass=config['DB']['PASSWORD']
+db_name=config['DB']['NAME']
+
+db = pymysql.connect(
+        host=db_host, 
+        port=db_port, 
+        user=db_user, 
+        passwd=db_pass,
+        db=db_name,
+        charset="utf8"
+        )
 snowball=db.cursor()
 
 # 포트폴리오 클래스 생성

@@ -8,7 +8,7 @@ from datetime import datetime
 from datetime import timedelta
 warnings.simplefilter(action='ignore', category=FutureWarning)  # FutureWaring 제거
 
-opendf = pd.read_csv('/home/ubuntu/mainF/snowball_CoreCode/src/core/openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
+opendf = pd.read_csv('src/core/openDate.csv', index_col='index')  # 2002-09-13~2022-11-07까지의 개장일 csv파일
 opendf['Opendate'] = pd.to_datetime(opendf['Opendate'], format='%Y-%m-%d', errors='raise')  # 원소를 datetime타입으로 변경
 datetimeList = []
 for date in opendf['Opendate']:

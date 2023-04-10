@@ -1,16 +1,31 @@
 from fastapi import APIRouter
 from src.model.portfolioModel import Portfolio
 from src.core.second_build import Backtest
+from pymongo import MongoClient
 
 router = APIRouter()
+client = MongoClient("mongodb://localhost:27017/")
+db = client["insert_server"]
+collection = db["portfolio"]
 
 @router.post("/getInfo")
 async def backtestAPI(portfolioInput: Portfolio):
 
-
     backtest_object = setBackTest(portfolioInput)
 
     backtest_object.doBackTest()
+
+    info =  {
+        "onlyMoney": backtest_object.input_money_to_portfolio_account,
+        "value_with_tax": backtest_object.portfolio_with_tax_benefit_account,
+        "value_without_tax": backtest_object.portfolio_without_tax_benefit_account,
+        "result_with_tax": backtest_object.portfolio_object.portfolio_account_with_tax_benefit,
+        "result_without_tax": backtest_object.portfolio_object.portfolio_account_without_tax_benefit,
+        "recieve_with_tax": backtest_object.portfolio_object.portfolio_receive_without_tax_benefit,
+        "recieve_without_tax": backtest_object.portfolio_object.portfolio_receive_without_tax_benefit
+    }
+
+    collection.insert_one(info)
 
     return {
         "onlyMoney": backtest_object.input_money_to_portfolio_account,

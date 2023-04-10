@@ -10,7 +10,7 @@ import configparser
 from src.core.getDatainfo import getDailyDateInfo, getPayInDateInfo, getRebalanceDateInfo, getYearlyDateInfo
 
 config = configparser.ConfigParser()
-config.read('src/core/config.ini')
+config.read('src/core/mysql-config.ini')
 db_host=config['DB']['HOST']
 db_user=config['DB']['USER']
 db_port=int(config['DB']['PORT'])

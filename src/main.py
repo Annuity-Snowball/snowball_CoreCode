@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+import json
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.api import api_router
-
+from src.utils.numpyEncoder import NumpyEncoder
 
 app = FastAPI()
 

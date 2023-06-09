@@ -1,7 +1,0 @@
-/__pycache__
-/endpoints/__pycache__
-*.pyc
-__pycache__/
-*.py[cod]
-/endpoints/__pycache__/
-/endpoints/__pycache__/*.py[cod]

@@ -3,6 +3,7 @@ from src.model.strategyModel import Strategy
 
 class Portfolio(BaseModel):
     id: int
+    username: str
     name: str
     startDate :str
     endDate: str
@@ -11,4 +12,4 @@ class Portfolio(BaseModel):
     startMoney: int
     inputWay: int
     strategyNumber: int
-    strategies:list[Strategy]
+    strategies:list[Strategy]                                  

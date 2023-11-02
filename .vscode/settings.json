@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "cstdlib": "c",
-        "locale": "c",
-        "ostream": "c",
-        "new": "c"
-    }
-}
